@@ -21,7 +21,7 @@ class NumpyArray(mm.fields.List):
 
     def __init__(self, dtype=None, *args, **kwargs):
         self.dtype = dtype
-        super(NumpyArray, self).__init__(mm.base.FieldABC, *args, **kwargs)
+        super(NumpyArray, self).__init__(mm.base.Field, *args, **kwargs)
 
     def _deserialize(self, value, attr, obj):
         try:

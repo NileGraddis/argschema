@@ -7,7 +7,7 @@ from operator import add
 import inspect
 import marshmallow as mm
 import collections
-FIELD_TYPE_MAP = {v: k for k, v in mm.Schema.TYPE_MAPPING.items()}
+FIELD_TYPE_MAP = {v: k for k, v in mm.Schema.TYPE_MAPPING.items() if k is not bytes}
 
 
 def args_to_dict(argsobj):

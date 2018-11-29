@@ -361,13 +361,15 @@ def build_schema_arguments(schema, arguments=None, path=None, description=None):
     return arguments
 
 
-def schema_argparser(schema):
+def schema_argparser(schema, parser_kwargs=None):
     """given a jsonschema, build an argparse.ArgumentParser
 
     Parameters
     ----------
     schema : argschema.schemas.ArgSchema
         schema to build an argparser from
+    parser_kwargs : dict, optional
+        keyword arguments that will be passed to the new parser's constructor
 
     Returns
     -------
@@ -376,6 +378,9 @@ def schema_argparser(schema):
 
     """
 
+    if parser_kwargs is None:
+        parser_kwargs = {}
+
     # build up a list of argument groups using recursive function
     # to traverse the tree, root node gets the description given by doc string
     # of the schema
@@ -383,7 +388,7 @@ def schema_argparser(schema):
     # make the root schema appeear first rather than last
     arguments = [arguments[-1]] + arguments[0:-1]
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(**parser_kwargs)
 
     for arg_group in arguments:
         group = parser.add_argument_group(
@@ -452,3 +457,50 @@ def dump(schema, d):
             raise mm.ValidationError(errors)
 
     return results
+
+
+
+def nested_parsers_help(control_parser, schema_parser, **nested_parsers):
+    '''
+
+    Parameters
+    ==========
+    control_parser : argparse.ArgumentParser
+    schema_parser : argparse.ArgumentParser
+    nested_parsers : dict, optional
+
+    '''
+
+    formatter = control_parser._get_formatter()
+
+    formatter.add_usage(control_parser.usage, control_parser._actions, control_parser._mutually_exclusive_groups)
+
+    formatter.add_text(schema_parser.description)
+
+    for action_group in control_parser._action_groups:
+        formatter.start_section(action_group.title)
+        formatter.add_text(action_group.description)
+        formatter.add_arguments(action_group._group_actions)
+        formatter.end_section()
+
+    for action_group in schema_parser._action_groups:
+        formatter.start_section(action_group.title)
+        formatter.add_text(action_group.description)
+        formatter.add_arguments(action_group._group_actions)
+        formatter.end_section()
+
+    for nested_category, nested_parser_spec in nested_parsers.items():
+        formatter.start_section(nested_category)
+        for key, parser in nested_parser_spec.items():
+            formatter.start_section(key)
+            formatter.add_text(parser.description)
+            formatter.add_arguments(parser._actions)
+            formatter.end_section()
+        formatter.end_section()
+
+    formatter.add_text(schema_parser.epilog)
+
+    return formatter.format_help()
+
+
+# def setup_nested_parsers()

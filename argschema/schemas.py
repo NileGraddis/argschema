@@ -29,7 +29,12 @@ class DefaultSchema(mm.Schema):
         return in_data
 
 
-class ArgSchema(DefaultSchema):
+class LogSchema(DefaultSchema):
+    log_level = LogLevel(
+        default='ERROR',
+        description="set the logging level of the module")
+
+class ArgSchema(LogSchema):
     """The base marshmallow schema used by ArgSchemaParser to identify
     input_json and output_json files and the log_level
     """
@@ -39,6 +44,4 @@ class ArgSchema(DefaultSchema):
 
     output_json = OutputFile(
         description="file path to output json file")
-    log_level = LogLevel(
-        default='ERROR',
-        description="set the logging level of the module")
+

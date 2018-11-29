@@ -4,10 +4,13 @@ subclassed when using this library
 import json
 import logging
 import copy
+
+import marshmallow as mm
+
 from . import schemas
 from . import utils
 from . import fields
-import marshmallow as mm
+from .endpoints import builtin_sinks, builtin_sources
 
 
 def contains_non_default_schemas(schema, schema_list=[]):
@@ -107,6 +110,9 @@ def fill_defaults(schema, args):
     return args
 
 
+import argparse
+import functools
+
 class ArgSchemaParser(object):
     """The main class you should sub-class to write your own argschema module.
     Takes input_data, reference to a input_json and the command line inputs and parses out the parameters
@@ -143,7 +149,12 @@ class ArgSchemaParser(object):
                  schema_type=None,  # schema for parsing arguments
                  output_schema_type=None,  # schema for parsing output_json
                  args=None,
-                 logger_name=__name__):
+                 logger_name=__name__,
+                 sources=None,
+                 sinks=None,
+                 default_source='json',
+                 default_sink='json'
+    ):
 
         if schema_type is None:
             schema_type = self.default_schema
@@ -154,18 +165,31 @@ class ArgSchemaParser(object):
         self.logger = self.initialize_logger(logger_name, 'WARNING')
         self.logger.debug('input_data is {}'.format(input_data))
 
-        # convert schema to argparse object
-        p = utils.schema_argparser(self.schema)
-        argsobj = p.parse_args(args)
-        argsdict = utils.args_to_dict(argsobj, self.schema)
-        self.logger.debug('argsdict is {}'.format(argsdict))
+        if sources is None:
+            sources = builtin_sources
+        if sinks is None:
+            sinks = builtin_sinks
 
-        if argsobj.input_json is not None:
-            fields.files.validate_input_path(argsobj.input_json)
-            with open(argsobj.input_json, 'r') as j:
-                jsonargs = json.load(j)
-        else:
-            jsonargs = input_data if input_data else {}
+        source_parsers, source_callbacks = builtin_sources.build()
+        sink_parsers, sink_callbacks = builtin_sinks.build()
+
+        control_parser = argparse.ArgumentParser()
+        schema_parser = utils.schema_argparser(self.schema, {'add_help': False})
+
+        control_parser.add_argument('--source', default=default_source, choices=sources.keys())
+        control_parser.add_argument('--sink', default=default_sink, choices=sinks.keys())
+        control_parser.format_help = functools.partial(utils.nested_parsers_help, 
+            control_parser, schema_parser, **{'sources': source_parsers, 'sinks': sink_parsers}
+        )
+
+        control, unknown = control_parser.parse_known_args()
+        source_known, unknown = source_parsers[control.source].parse_known_args(unknown)
+        jsonargs = source_callbacks[control.source](**source_known.__dict__)
+
+        sink_known, unknown = sink_parsers[control.sink].parse_known_args(unknown)
+        self._sink = functools.partial(sink_callbacks[control.sink], **sink_known.__dict__)
+
+        argsdict = schema_parser.parse_args(unknown).__dict__
 
         # merge the command line dictionary into the input json
         args = utils.smart_merge(jsonargs, argsdict)
@@ -178,6 +202,12 @@ class ArgSchemaParser(object):
         self.output_schema_type = output_schema_type
         self.logger = self.initialize_logger(
             logger_name, self.args.get('log_level'))
+
+
+    def sink(self, d):
+        output_data = self.get_output_json(d)
+        self._sink(output_data)
+
 
     def get_output_json(self, d):
         """method for getting the output_json pushed through validation
